@@ -1,4 +1,5 @@
 # Amazon Product Recommendation & Review Intelligence Platform
+**DATA 228 — Final Project Report**
 
 ![Project Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen)
 ![Python Version](https://img.shields.io/badge/Python-3.10-blue)
@@ -7,112 +8,189 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.95%2B-teal)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.20%2B-red)
 
-An end-to-end Big Data machine learning pipeline and interactive dashboard for the [McAuley-Lab Amazon Reviews 2023](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023) dataset. This project processes gigabytes of raw consumer data to generate actionable business intelligence, customer personalization profiles, and intelligent product recommendations.
+An end-to-end Big Data machine learning pipeline and interactive dashboard built on the [McAuley-Lab Amazon Reviews 2023](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023) dataset (~4.6M records). This project processes large-scale consumer review data to generate actionable business intelligence, customer personalization profiles, and intelligent product recommendations.
 
 ---
 
 ## 🎯 Executive Summary
 
-This platform bridges the gap between heavy, offline Big Data processing and low-latency, online serving. It ingests massive raw JSONL datasets, cleans and engineers features using distributed PySpark, trains multiple machine learning algorithms tracked by MLflow, and ultimately serves the finalized models and analytics via a robust FastAPI backend and an interactive Streamlit frontend.
+This platform bridges the gap between heavy, offline Big Data processing and low-latency, online serving. It ingests raw JSONL datasets, cleans and engineers features using distributed PySpark, trains multiple machine learning algorithms tracked by MLflow, and ultimately serves the finalized models and analytics via a robust FastAPI backend and an interactive Streamlit frontend.
+
+The resulting system features a fully functional recommendation engine powered by **Alternating Least Squares (ALS)**, sentiment and text classification models (Logistic Regression, Random Forest, Naive Bayes), and unsupervised clustering (K-Means).
 
 ### ✨ Key Features
-*   **Customer Personalization (ALS):** Uses Collaborative Filtering (Alternating Least Squares) to predict how a specific user will rate products they haven't seen yet.
-*   **Review Intelligence (NLP):** Natural Language Processing pipeline that tokenizes reviews, applies TF-IDF, and utilizes classification algorithms to assess customer sentiment.
-*   **Business Dashboard:** Interactive metrics and visualizations (powered by Altair) exposing raw dataset statistics, rating distributions, and product popularity.
-*   **Microservice Architecture:** Fully decoupled Data Pipeline and Serving Layers, containerized using Docker for instant portability.
+*   **Customer Personalization (ALS):** Collaborative Filtering to predict how a user will rate unseen products.
+*   **Review Intelligence (NLP):** Tokenization, TF-IDF, and classification to assess customer sentiment.
+*   **Business Dashboard:** Interactive metrics and visualizations via Altair — rating distributions, product popularity, and user timelines.
+*   **Microservice Architecture:** Fully decoupled Offline Pipeline and Online Serving Layer, containerized with Docker.
 
 ---
 
 ## 🛠 Technology Stack
 
-*   **Data Processing:** PySpark, PyArrow, Pandas
-*   **Machine Learning:** Spark MLlib (ALS, Logistic Regression, Random Forest, Naive Bayes, K-Means)
-*   **MLOps:** MLflow (Experiment tracking, Metric logging, Model registry), SQLite
-*   **Backend API:** FastAPI, Uvicorn
-*   **Frontend UI:** Streamlit, Altair
-*   **DevOps & Infrastructure:** Docker, Docker Compose, Pytest
+| Category | Technology |
+| :--- | :--- |
+| **Language** | Python 3.10+ |
+| **Big Data Engine** | Apache Spark / PySpark (Java 17) |
+| **Data Storage** | Parquet, PyArrow |
+| **Machine Learning** | Spark MLlib (ALS, LR, RF, NB, K-Means) |
+| **MLOps** | MLflow (Experiment tracking, Model registry), SQLite |
+| **Backend API** | FastAPI, Uvicorn |
+| **Frontend/Dashboard** | Streamlit, Altair, Pandas |
+| **DevOps** | Docker, Docker Compose, GitHub Actions, Pytest |
+| **Data Source** | Hugging Face (McAuley-Lab/Amazon-Reviews-2023) |
 
 ---
 
 ## 🏗 System Architecture
 
-The project architecture strictly adheres to modern ML engineering best practices by separating the heavy "Offline" computation from the real-time "Online" serving.
+The architecture separates the heavy **Offline** computation from the real-time **Online** serving.
 
-### 1. Offline Data & Machine Learning Pipeline
-*Executed on-demand when new data is available.*
-1.  **Ingestion (`src/ingestion/data_loader.py`):** Converts massive raw `.jsonl` files into highly-optimized, compressed Parquet files.
-2.  **EDA (`src/eda/eda.py`):** Calculates global rating distributions and identifies viral products.
-3.  **Preprocessing (`src/preprocessing/cleaner.py`):** Handles missing values, enforces schema casting, and applies "Cold-Start Filtering" (removing users/items with < 5 interactions).
-4.  **Feature Engineering (`src/features/feature_engineering.py`):** NLP processing (`StringIndexer`, `Tokenizer`, `StopWordsRemover`, `HashingTF`, `IDF`) to vectorize review text.
-5.  **Model Training (`src/models/train.py`):** Conducts a model tournament. Evaluates ALS for recommendations and K-Means/Classifiers for review analysis. Logs all artifacts natively to MLflow.
+```mermaid
+graph TD
+    A[Raw JSONL Data] -->|PySpark Ingestion| B(Ingested Parquet)
+    B -->|PySpark Preprocessing| C(Clean Parquet)
+    C -->|Spark MLlib| D{Feature Engineering}
+    D -->|NLP / Embeddings| E(Engineered Features Parquet)
 
-### 2. Online Serving Layer
-*Containerized web services that read pre-computed artifacts.*
-1.  **FastAPI Backend:** Loads the Spark Pipeline models via `mlflow.pyfunc` and serves high-speed recommendation logic and dataset queries.
-2.  **Streamlit Dashboard:** The user-facing application providing interactive filters, data tables, and dynamic charting.
+    E --> F[Model Tournament]
+    F -->|ALS Recommender| G[MLflow Tracking]
+    F -->|LR / RF / NB Classifiers| G
+    F -->|K-Means Clustering| G
+
+    G -->|Model Registry| H((Champion Model Export))
+
+    C --> I[Streamlit Dashboard]
+    H --> J[FastAPI Backend]
+    I <-->|API Requests| J
+```
+
+### Storage Layers
+- **Raw JSONL**: Raw, unprocessed text and metadata from the source.
+- **Ingested Parquet**: Initial conversion for faster reads and reduced storage footprint.
+- **Clean Parquet**: Nulls removed, schemas enforced, cold-start filtered — source of truth for the dashboard.
+- **Engineered Features**: TF-IDF vectors and encoded categorical variables for ML models.
 
 ---
 
-## 🚀 Step-by-Step Setup & Execution Guide
+## 📊 Data Processing & Feature Engineering Pipeline
 
-### Step 1: Prerequisites
-*   [Python 3.10+](https://www.python.org/downloads/)
-*   [Java 17](https://adoptium.net/) (Required locally for PySpark execution)
-*   [Docker Desktop](https://www.docker.com/products/docker-desktop)
+The pipeline runs as a modular set of Python scripts under `src/`, orchestrated by `start_pipeline.sh`.
 
-### Step 2: Download the Dataset
-Download raw `.jsonl` category files from the [McAuley-Lab Amazon Reviews 2023](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023) dataset and place them in the root `data/` directory.
+### Step 1 — Data Ingestion & EDA (`src/ingestion/data_loader.py`, `src/eda/eda.py`)
+- Reads JSONL streams using PySpark and converts them to Parquet.
+- EDA calculates global rating distributions and identifies top-reviewed products.
+- **Output:** `data/raw/amazon_reviews.parquet`
 
-### Step 3: Run the Offline Pipeline
-Trigger the automated, end-to-end PySpark pipeline to process your data and train the models.
+### Step 2 — Preprocessing (`src/preprocessing/cleaner.py`)
+- Fills null values, casts data types, deduplicates records.
+- Applies **Cold-Start Filtering** (minimum 5 reviews per user and per product).
+- **Output:** `data/processed/amazon_clean.parquet/clean_data.parquet`
 
-```bash
-# Make the script executable
-chmod +x start_pipeline.sh
-
-# Run the pipeline
-./start_pipeline.sh
-```
-*Note: This process may take several minutes depending on the size of your `.jsonl` files. Upon completion, the `data/features/`, `models/`, and `mlruns/` directories will be populated.*
-
-### Step 4: Boot the Serving Layer (Docker)
-Once the pipeline has finished creating the artifacts, spin up the web services.
-
-```bash
-# Build and start the microservices in detached mode
-docker-compose up --build -d
-
-# Verify containers are running
-docker ps
-```
-
-### Step 5: Access the Application
-*   **Interactive Dashboard:** [http://localhost:8501](http://localhost:8501)
-*   **FastAPI Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+### Step 3 — Feature Engineering (`src/features/feature_engineering.py`)
+- Builds Spark ML pipelines: `StringIndexer` → `Tokenizer` → `StopWordsRemover` → `HashingTF` → `IDF`.
+- Encodes user IDs and product IDs as numeric indices for ALS.
+- **Output:** `data/features/engineered_features.parquet` + `models/feature_pipeline`
 
 ---
 
-## ⚙️ Configuration (Single Source of Truth)
+## 🤖 Machine Learning & Model Tournament
 
-All project paths, tracking URIs, and network ports are centrally managed. To modify where data is saved or what port the API runs on, edit the **`configs/config.yaml`** file. 
+All models are trained in `src/models/train.py` and tracked in MLflow.
 
-The `src/utils/config_loader.py` utility dynamically propagates these settings to every script in the repository, ensuring zero path-related bugs.
+### Collaborative Filtering — ALS (Recommendation)
+- **Mechanism**: Matrix factorization that decomposes the user-item interaction matrix into lower-dimensional dense vectors.
+- **Evaluation**: RMSE on a held-out test set — **ALS RMSE: 1.4381**
 
+### Classification Models — Sentiment & Review Intelligence
+- Models evaluated: **Logistic Regression**, **Random Forest**, **Naive Bayes**
+- Classify review sentiment based on NLP-engineered TF-IDF features.
+
+### Unsupervised Clustering — K-Means
+- Groups similar reviews or products based on textual embeddings to discover hidden patterns.
+
+### MLflow Experiment Tracking
+- All metrics, hyperparameters, and model artifacts are logged to `mlruns/`.
+- Best ALS model is exported to `models/als_recommendation_model`.
+- View the UI: `mlflow ui --backend-store-uri sqlite:///mlruns.db`
+
+---
+
+## 🌐 Deployment & Online Serving Layer
+
+Both services are containerized via Docker Compose and communicate over HTTP.
+
+### FastAPI Backend (`api/main.py`)
+| Endpoint | Description |
+| :--- | :--- |
+| `GET /health` | Health check |
+| `GET /stats` | Aggregate dataset statistics from clean Parquet |
+| `GET /users/{user_id}/top-products` | Highest-rated products for a given user |
+| `POST /predict_sentiment` | Keyword heuristic sentiment analysis |
+
+### Streamlit Dashboard (`dashboard/app.py`)
+- **Business Dashboard**: KPI metrics, rating distributions, review volume over time.
+- **Customer Personalization**: User review timeline, rating distribution, top-rated products.
+- **Review Intelligence**: Real-time sentiment analysis via the FastAPI backend.
 
 ---
 
 ## 🧪 Testing & CI/CD
 
-This project includes a robust testing suite and a Continuous Integration pipeline.
-
 ### Running Tests Locally
-We use `pytest` to validate both our configuration setup and our FastAPI backend logic:
 ```bash
 PYTHONPATH=. pytest tests/ -v
 ```
 
-### GitHub Actions
-A GitHub Actions workflow is included (`.github/workflows/python-app.yml`). It automatically installs dependencies and runs the test suite on every `push` and `pull_request` to the main branch.
+| Test File | Coverage |
+| :--- | :--- |
+| `tests/test_pipeline.py` | Config loading, module imports, directory structure |
+| `tests/test_api.py` | FastAPI health check, sentiment analysis (positive/negative/neutral) |
+
+**Latest results: 7/7 passed ✅**
+
+### GitHub Actions (CI)
+`.github/workflows/python-app.yml` automatically runs the full test suite on every `push` and `pull_request` to `main`. The workflow installs Java 17 for PySpark, installs all dependencies, and uploads a JUnit XML test report as an artifact.
+
+---
+
+## 🚀 Setup & Execution Guide
+
+### Prerequisites
+*   [Python 3.10+](https://www.python.org/downloads/)
+*   [Java 17](https://adoptium.net/) (required locally for PySpark)
+*   [Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Download the Dataset
+Download `.jsonl` files from [McAuley-Lab/Amazon-Reviews-2023](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023) and place them in `data/`.
+
+### 3. Run the Offline Pipeline
+```bash
+chmod +x start_pipeline.sh
+./start_pipeline.sh
+```
+*Takes several minutes. Populates `data/features/`, `models/`, and `mlruns/`.*
+
+### 4. Boot the Online Serving Layer
+```bash
+docker-compose up --build -d
+docker ps   # verify both containers are running
+```
+
+### 5. Access the Application
+*   **Streamlit Dashboard:** [http://localhost:8501](http://localhost:8501)
+*   **FastAPI Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+## ⚙️ Configuration
+
+All paths, ports, and URIs are centrally managed in **`configs/config.yaml`**. The `src/utils/config_loader.py` utility propagates these settings to every script — no hardcoded paths anywhere.
 
 ---
 
@@ -120,46 +198,49 @@ A GitHub Actions workflow is included (`.github/workflows/python-app.yml`). It a
 
 ```text
 .
-├── .github/workflows/        # CI/CD Pipeline
-│   └── python-app.yml        # GitHub Actions: auto-runs tests on push/PR
+├── .github/workflows/
+│   └── python-app.yml        # GitHub Actions CI — runs tests on every push/PR
 │
-├── PROJECT_REPORT.md         # Final documentation and results
-├── README.md                 # Primary project documentation
-├── RUN_EVIDENCE.md           # Pipeline run evidence and metrics
-├── Dockerfile                # Multi-service container definition (with Java JRE)
-├── docker-compose.yml        # Orchestration for API & Dashboard
+├── README.md                 # This file — project documentation & report
+├── RUN_EVIDENCE.md           # Pipeline run evidence and model metrics
+├── Dockerfile                # Container definition (Python 3.10 + Java JRE)
+├── docker-compose.yml        # Orchestration for API & Dashboard services
 ├── requirements.txt          # Python dependencies
-├── start_pipeline.sh         # One-click script to run the offline data & ML pipeline
+├── start_pipeline.sh         # One-click offline pipeline runner
 │
-├── api/                      # Backend Serving Layer
+├── api/
 │   └── main.py               # FastAPI application
 │
-├── configs/                  # Centralized Project Configuration (Single Source of Truth)
-│   └── config.yaml           # Ports, tracking URIs, file paths
+├── configs/
+│   └── config.yaml           # Centralized config (paths, ports, URIs)
 │
-├── dashboard/                # Frontend Serving Layer
-│   └── app.py                # Streamlit dashboard application
+├── dashboard/
+│   └── app.py                # Streamlit dashboard
 │
-├── data/                     # Local Data Storage (Mounted to Docker)
+├── data/                     # Local Data Storage (mounted to Docker)
 │   ├── features/             # ML-ready engineered features
-│   ├── processed/            # Cleaned & filtered data
-│   └── raw/                  # Ingested parquets & jsonl
+│   ├── processed/            # Cleaned & filtered Parquet
+│   └── raw/                  # Ingested Parquet from JSONL
 │
-├── mlruns/                   # MLflow Tracking Database & Experiment Artifacts
+├── mlruns/                   # MLflow experiment tracking & artifacts
 │
-├── models/                   # Serialized ML Artifacts
-│   ├── als_recommendation_model/ 
-│   └── feature_pipeline/     
+├── models/
+│   ├── als_recommendation_model/
+│   └── feature_pipeline/
 │
-├── src/                      # Core Machine Learning & Data Logic
-│   ├── eda/eda.py            # Generates statistics and rating distributions
-│   ├── features/feature_engineering.py # Runs NLP and vectorizes data
-│   ├── ingestion/data_loader.py # Converts JSONL to Parquet
-│   ├── models/train.py       # Trains ALS, Classification, and Clustering algorithms
-│   ├── preprocessing/cleaner.py # Fills nulls and filters cold-starts
-│   └── utils/config_loader.py # Configuration loader utility
+├── src/
+│   ├── eda/eda.py
+│   ├── features/feature_engineering.py
+│   ├── ingestion/data_loader.py
+│   ├── models/train.py
+│   ├── preprocessing/cleaner.py
+│   └── utils/config_loader.py
 │
-└── tests/                    # Validation & Unit Tests
+└── tests/
     ├── test_api.py            # FastAPI endpoint unit tests
-    └── test_pipeline.py       # Pytest suite for checking modules and configs
+    └── test_pipeline.py      # Smoke tests for config, modules, and directories
 ```
+
+---
+
+*This document serves as both the project README and the DATA 228 final project report, covering architecture, implementation, results, and deployment of a scalable recommendation and analytics pipeline.*
